@@ -44,12 +44,13 @@ namespace ITN.Utils.Strings
         public static bool IsEmailValid(this string email) => StringUtilities.ValidEmail(email);
 
         /// <summary>
-        /// Truncates the string and adds an ellipsis if the string exceeds the maximum length.
-        /// If the string is already less than or equal to the <paramref name="maxLength"/>, the string remains unchanged.
+        /// Truncates the string and adds an ellipsis if the string exceeds the maximum length without cutting off words.
+        /// If the string is already shorter than or equal to <paramref name="maxLength"/>, the string remains unchanged.
         /// </summary>
         /// <param name="input">The input string to be truncated.</param>
-        /// <param name="maxLength">The maximum length of the string after truncation. If the string exceeds this length, an ellipsis will be added at the end.</param>
-        /// <returns>The truncated string with ellipsis added if necessary.</returns>
+        /// <param name="maxLength">The maximum length of the string after truncation. If the string exceeds this length, an ellipsis will be added to the end of the string.</param>
+        /// <returns>A truncated string, with an ellipsis added if necessary.</returns>
+
         public static string Truncate(this string input, int maxLength) => StringUtilities.TruncateWithEllipsis(input, maxLength);
 
         /// <summary>

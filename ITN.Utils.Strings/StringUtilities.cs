@@ -48,7 +48,12 @@ namespace ITN.Utils.Strings
                 return input.Substring(0, maxLength - 3) + "...";
 
             var truncated = input.Substring(0, maxLength - 3);
+
+            if (input[maxLength-3] == ' ')
+                return truncated + "...";
+
             var lastSpaceIndex = truncated.LastIndexOf(' ');
+
 
             if(lastSpaceIndex > 0)
             {
