@@ -10,7 +10,7 @@ namespace ITN.Utils.Strings
     {
         public static string Generate(this string input, string separator = "-")
         {
-            if (string.IsNullOrEmpty(input))
+            if (string.IsNullOrWhiteSpace(input))
                 return string.Empty;
 
             string normalized = input.Normalize(NormalizationForm.FormD);
@@ -18,13 +18,17 @@ namespace ITN.Utils.Strings
 
             foreach (char c in normalized)
             {
-                UnicodeCategory uc = CharUnicodeInfo.GetUnicodeCategory(c);
-                if (uc != UnicodeCategory.NonSpacingMark)
+                if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
                 {
                     sb.Append(c);
                 }
             }
+
             string noDiacritics = sb.ToString().Normalize(NormalizationForm.FormC);
+
+            noDiacritics = noDiacritics
+                .Replace("đ", "d")
+                .Replace("Đ", "D");
 
             string noPunctuation = Regex.Replace(noDiacritics, @"[^\w\s]", "");
 
@@ -32,6 +36,7 @@ namespace ITN.Utils.Strings
 
             return result.ToLower();
         }
+
 
     }
 }
