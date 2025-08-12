@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <Authors>Nam Hoai</Authors>
+    <Version>1.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

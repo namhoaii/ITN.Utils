@@ -2,100 +2,73 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using System.Net;
+using System.Text;
 
 namespace ITN.Utils.ApiToolkit
 {
     public class ApiResponseMiddleware
     {
         private readonly RequestDelegate _next;
-        private static readonly string[] _ignorePaths = { "/swagger", "/health", "/favicon.ico" };
+        private readonly CustomResponseOptions _options;
 
-        public ApiResponseMiddleware(RequestDelegate next)
+        public ApiResponseMiddleware(RequestDelegate next, CustomResponseOptions options)
         {
             _next = next;
+            _options = options;
         }
 
         public async Task InvokeAsync(HttpContext context)
         {
-            // Bỏ qua các path không cần wrap
-            if (_ignorePaths.Any(p => context.Request.Path.StartsWithSegments(p, StringComparison.OrdinalIgnoreCase)))
-            {
-                await _next(context);
-                return;
-            }
+            var originalBodyStream = context.Response.Body;
+            using var memoryStream = new MemoryStream();
+            context.Response.Body = memoryStream;
 
-            // Lấy hoặc tạo TraceId
-            var traceId = context.Request.Headers.TryGetValue("X-Trace-Id", out var headerTraceId)
-                ? headerTraceId.ToString()
-                : Guid.NewGuid().ToString();
-            context.Items["TraceId"] = traceId;
+            await _next(context);
+
+            memoryStream.Seek(0, SeekOrigin.Begin);
+            var bodyText = await new StreamReader(memoryStream).ReadToEndAsync();
+
+            bool success = context.Response.StatusCode >= 200 && context.Response.StatusCode < 300;
+
+            object? data = null;
+            object? error = null;
 
             try
             {
-                var originalBodyStream = context.Response.Body;
-                using var memoryStream = new MemoryStream();
-                context.Response.Body = memoryStream;
+                var json = string.IsNullOrWhiteSpace(bodyText)
+                    ? new Dictionary<string, object>()
+                    : JsonSerializer.Deserialize<Dictionary<string, object>>(bodyText);
 
-                await _next(context);
-
-                memoryStream.Seek(0, SeekOrigin.Begin);
-                var bodyText = await new StreamReader(memoryStream).ReadToEndAsync();
-                memoryStream.Seek(0, SeekOrigin.Begin);
-
-                object? bodyData = null;
-                if (!string.IsNullOrWhiteSpace(bodyText) && context.Response.ContentType?.Contains("application/json") == true)
+                if (success)
                 {
-                    try { bodyData = JsonSerializer.Deserialize<object>(bodyText); }
-                    catch { bodyData = bodyText; }
+                    data = json.ContainsKey("data") ? json["data"] : json;
                 }
-
-                var success = context.Response.StatusCode >= 200 && context.Response.StatusCode < 300;
-                var response = new ApiResponse
+                else
                 {
-                    Success = success,
-                    Data = success ? bodyData : null,
-                    Error = success ? null : new ApiError
-                    {
-                        Code = $"HTTP_{context.Response.StatusCode}",
-                        Message = bodyData?.ToString() ?? "An error occurred"
-                    },
-                    Timestamp = DateTime.UtcNow,
-                    TraceId = traceId
-                };
-
-                context.Response.ContentType = "application/json";
-                var json = JsonSerializer.Serialize(response);
-                context.Response.ContentLength = System.Text.Encoding.UTF8.GetByteCount(json);
-
-                context.Response.Body = originalBodyStream;
-                await context.Response.WriteAsync(json);
+                    error = json.ContainsKey("error") ? json["error"] :
+                            new { code = json.GetValueOrDefault("code") ?? "ERROR", message = json.GetValueOrDefault("message") ?? "Request failed" };
+                }
             }
-            catch (Exception ex)
+            catch
             {
-                await HandleExceptionAsync(context, ex, traceId);
+                if (success)
+                    data = bodyText;
+                else
+                    error = new { code = "ERROR", message = bodyText };
             }
-        }
 
-        private static Task HandleExceptionAsync(HttpContext context, Exception ex, string traceId)
-        {
-            var response = new ApiResponse
+            var finalResponse = _options.ResponsePattern(context, success, data, error);
+
+            var modifiedBody = JsonSerializer.Serialize(finalResponse, new JsonSerializerOptions
             {
-                Success = false,
-                Data = null,
-                Error = new ApiError
-                {
-                    Code = "INTERNAL_SERVER_ERROR",
-                    Message = ex.Message
-                },
-                Timestamp = DateTime.UtcNow,
-                TraceId = traceId
-            };
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
 
-            var json = JsonSerializer.Serialize(response);
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
             context.Response.ContentType = "application/json";
-            return context.Response.WriteAsync(json);
-        }
+            context.Response.ContentLength = Encoding.UTF8.GetByteCount(modifiedBody);
 
+            context.Response.Body = originalBodyStream;
+            await context.Response.WriteAsync(modifiedBody, Encoding.UTF8);
+        }
     }
 }
