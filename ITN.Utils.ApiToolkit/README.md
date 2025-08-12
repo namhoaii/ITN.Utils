@@ -1,61 +1,92 @@
-# ITN.Utils.ApiResponse
 
-This project provides a custom middleware for ASP.NET Core to standardize API responses with a consistent format and include useful metadata such as `traceId` for request tracking.
+# ApiResponseWrapper Middleware
+
+A middleware for ASP.NET Core Web API to standardize API responses into a consistent format.
 
 ## Features
+- Automatically wraps all responses into a consistent structure.
+- Supports success and error responses.
+- Allows full customization of the response pattern.
+- Includes timestamp and trace ID for better debugging.
 
-- Automatically formats all API responses in a consistent JSON structure.
-- Adds a unique `traceId` to each request for debugging and tracking purposes.
-- Handles both success and error responses globally.
-- Allows manual triggering of custom messages and errors from controllers.
-
-## Standard Response Format
-
-```json
-{
-  "traceId": "d1b7d25c-6f8a-4e65-a8a0-b321b42f0d5e",
-  "success": true,
-  "message": "Request completed successfully",
-  "data": { ... }
-}
-```
-
-## How It Works
-
-1. **Middleware** intercepts all responses and wraps them in the standard format.
-2. The `traceId` is generated per request and included in the response.
-3. Errors and exceptions are caught and returned in the same format with `success = false`.
-
-## Example Usage in Controller
-
-```csharp
-[HttpGet("example")]
-public IActionResult Example()
-{
-    return ApiResponse.Ok(new { Name = "John", Age = 30 }, "Data retrieved successfully");
-}
-
-[HttpGet("error")]
-public IActionResult ErrorExample()
-{
-    return ApiResponse.Fail("Something went wrong");
-}
-```
+---
 
 ## Installation
 
-1. Add the middleware to your ASP.NET Core project:
+1. Add the `ApiResponseMiddleware` and `ApiResponseMiddlewareExtensions` classes to your project.
+2. In `Program.cs` or `Startup.cs`, register the middleware:
 
 ```csharp
-public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+app.UseApiResponseWrapper();
+```
+
+---
+
+## Basic Usage
+
+### 1. Add the middleware
+```csharp
+app.UseApiResponseWrapper();
+```
+
+### 2. In your controllers, just return standard results:
+```csharp
+[HttpGet("{id}")]
+public IActionResult GetUser(int id)
 {
-    app.UseMiddleware<ApiResponseMiddleware>();
-    // other middlewares...
+    var user = _userService.GetById(id);
+    if (user == null)
+        return NotFound(new { code = "USER_NOT_FOUND", message = "User does not exist" });
+
+    return Ok(user);
+}
+```
+The middleware will convert responses into:
+```json
+{
+  "success": true,
+  "data": { ... },
+  "error": null,
+  "timestamp": "2025-08-10T10:00:00Z",
+  "traceId": "af32bd77-1abf-4a3d-bf4f-91a61e7d7e7b"
 }
 ```
 
-2. Optionally, use the provided helper class `ApiResponse` for manual responses in controllers.
+---
+
+## Custom Usage
+
+You can customize the response pattern by passing options:
+
+```csharp
+app.UseApiResponseWrapper(options =>
+{
+    options.ResponsePattern = (context, success, data, error) => new
+    {
+        status = success ? "OK" : "FAIL",
+        result = data,
+        errorDetail = error,
+        time = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+        traceId = context.TraceIdentifier
+    };
+});
+```
+
+Example error response:
+```json
+{
+  "status": "FAIL",
+  "result": null,
+  "errorDetail": {
+    "code": "USER_NOT_FOUND",
+    "message": "User does not exist"
+  },
+  "time": "2025-08-10 10:00:00",
+  "traceId": "af32bd77-1abf-4a3d-bf4f-91a61e7d7e7b"
+}
+```
+
+---
 
 ## License
-
-This project is licensed under the MIT License.
+MIT
