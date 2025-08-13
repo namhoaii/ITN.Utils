@@ -13,11 +13,14 @@ A middleware for ASP.NET Core Web API to standardize API responses into a consis
 
 ## Installation
 
-1. Add the `ApiResponseMiddleware` and `ApiResponseMiddlewareExtensions` classes to your project.
-2. In `Program.cs` or `Startup.cs`, register the middleware:
+```bash
+dotnet add package ITN.Utils.ApiToolkit 
+```
 
-```csharp
-app.UseApiResponseWrapper();
+_or_
+
+```PM
+Install-Package ITN.Utils.ApiToolkit 
 ```
 
 ---
